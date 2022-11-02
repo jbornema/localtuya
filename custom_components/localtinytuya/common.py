@@ -3,6 +3,8 @@ import asyncio
 import logging
 import time
 from datetime import timedelta
+from abc import ABC, abstractmethod
+import importlib
 
 from homeassistant.const import (
     CONF_DEVICE_ID,
@@ -22,6 +24,11 @@ from homeassistant.helpers.dispatcher import (
 )
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+from . import tinytuya
+from . import pytuya
 
 from . import pytuya
 from .const import (
@@ -183,13 +190,24 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
         self.debug("Connecting to %s", self._dev_config_entry[CONF_HOST])
 
         try:
-            self._interface = await pytuya.connect(
-                self._dev_config_entry[CONF_HOST],
-                self._dev_config_entry[CONF_DEVICE_ID],
-                self._local_key,
-                float(self._dev_config_entry[CONF_PROTOCOL_VERSION]),
-                self,
-            )
+            if(float(self._dev_config_entry[CONF_PROTOCOL_VERSION]) == 3.4):
+                module = importlib.import_module('custom_components.localtuya.tinytuya.tinytuya')
+            
+                self._interface = await module.connect(
+                    self._dev_config_entry[CONF_HOST],
+                    self._dev_config_entry[CONF_DEVICE_ID],
+                    self._local_key,
+                    float(self._dev_config_entry[CONF_PROTOCOL_VERSION]),
+                   self,
+                )
+            else:
+                self._interface = await pytuya.connect(
+                    self._dev_config_entry[CONF_HOST],
+                    self._dev_config_entry[CONF_DEVICE_ID],
+                    self._local_key,
+                    float(self._dev_config_entry[CONF_PROTOCOL_VERSION]),
+                    self,
+                )
             self._interface.add_dps_to_request(self.dps_to_request)
         except Exception:  # pylint: disable=broad-except
             self.exception(f"Connect to {self._dev_config_entry[CONF_HOST]} failed")
@@ -340,7 +358,13 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
     @callback
     def status_updated(self, status):
         """Device updated status."""
+        self.debug("Got status update:" + str(status))
+        if("dps" in status):
+            status = status["dps"]
+
+
         self._status.update(status)
+        self.debug("Got status new:" + str(self._status))
         self._dispatch_status()
 
     def _dispatch_status(self):
@@ -355,6 +379,10 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
         if self._unsub_interval is not None:
             self._unsub_interval()
             self._unsub_interval = None
+            
+        if(self._interface != None):
+            self._interface.close()
+  
         self._interface = None
         self.debug("Disconnected - waiting for discovery broadcast")
 

@@ -88,7 +88,7 @@ CONFIGURE_DEVICE_SCHEMA = vol.Schema(
         vol.Required(CONF_LOCAL_KEY): str,
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_DEVICE_ID): str,
-        vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3"]),
+        vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3", "3.4"]),
         vol.Optional(CONF_SCAN_INTERVAL): int,
         vol.Optional(CONF_MANUAL_DPS): str,
         vol.Optional(CONF_RESET_DPIDS): str,
@@ -101,7 +101,7 @@ DEVICE_SCHEMA = vol.Schema(
         vol.Required(CONF_DEVICE_ID): cv.string,
         vol.Required(CONF_LOCAL_KEY): cv.string,
         vol.Required(CONF_FRIENDLY_NAME): cv.string,
-        vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3"]),
+        vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3", "3.4"]),
         vol.Optional(CONF_SCAN_INTERVAL): int,
         vol.Optional(CONF_MANUAL_DPS): cv.string,
         vol.Optional(CONF_RESET_DPIDS): str,
@@ -144,7 +144,7 @@ def options_schema(entities):
             vol.Required(CONF_FRIENDLY_NAME): str,
             vol.Required(CONF_HOST): str,
             vol.Required(CONF_LOCAL_KEY): str,
-            vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3"]),
+            vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3", "3.4"]),
             vol.Optional(CONF_SCAN_INTERVAL): int,
             vol.Optional(CONF_MANUAL_DPS): str,
             vol.Optional(CONF_RESET_DPIDS): str,
@@ -242,12 +242,23 @@ async def validate_input(hass: core.HomeAssistant, data):
 
     reset_ids = None
     try:
-        interface = await pytuya.connect(
-            data[CONF_HOST],
-            data[CONF_DEVICE_ID],
-            data[CONF_LOCAL_KEY],
-            float(data[CONF_PROTOCOL_VERSION]),
-        )
+        if(float(data[CONF_PROTOCOL_VERSION]) == 3.4):
+            module = import_module('custom_components.localtinytuya.tinytuya.tinytuya')
+            interface = await module.connect(
+                data[CONF_HOST],
+                data[CONF_DEVICE_ID],
+                data[CONF_LOCAL_KEY],
+                float(data[CONF_PROTOCOL_VERSION]),
+                None,
+            )
+        else:
+            interface = await pytuya.connect(
+                data[CONF_HOST],
+                data[CONF_DEVICE_ID],
+                data[CONF_LOCAL_KEY],
+                float(data[CONF_PROTOCOL_VERSION]),
+            )
+
         if CONF_RESET_DPIDS in data:
             reset_ids_str = data[CONF_RESET_DPIDS].split(",")
             reset_ids = []
